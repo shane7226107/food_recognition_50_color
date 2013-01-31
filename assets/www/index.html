@@ -1,0 +1,769 @@
+﻿<!DOCTYPE HTML>
+<html>
+	
+<head>
+<title>Food Recognition</title>
+	<style>
+		div {
+ 
+  		text-align : center;
+    
+		}
+	</style>>
+	<!-- javascript libraries-->
+	<meta name="viewport" content="width=device-width, initial-scale=1"> 
+	<link rel="stylesheet" href="jquery.mobile-1.1.0-rc.2.min.css" />
+	<script src="jquery-1.7.1.min.js"></script>
+	<script src="jquery.mobile-1.1.0-rc.2.min.js"></script>
+	<script type="text/javascript" charset="utf-8" src="cordova-2.1.0.js"></script>
+	
+	<!-- javascript -->
+	<script type="text/javascript" charset="utf-8">
+		 var device_uuid = "";
+    	 var pictureSource;   
+    	 var destinationType;
+    	 //server for color image
+    	 var serverURL = "http://cml18.csie.ntu.edu.tw/~larry61410/server_shane/";
+    	 //server for gray-scale image
+    	 //var serverURL = "http://cml18.csie.ntu.edu.tw/~larry61410/server_1010/";  
+    	 var resultURL = "";    	
+         var uploadURL = serverURL+"upload.php"
+         var uploadURL_RGB_feature = serverURL+"upload_RGB_feature.php"
+         var fileCheckPHP =serverURL+"fileCheck.php"
+         var fileDeletePHP =serverURL+"fileDelete.php"
+         var testPHP = serverURL+"test.php"
+         var refreshPHP;
+         var filePath ="/sdcard/ntufrs/";    	 
+    	 var identifyingFlag = 0;
+    	 var string_WaitForIdentification = "please wait util the process is finished."		 
+    	 var XMLHttpRequestObject = false;
+  		 XMLHttpRequestObject = new XMLHttpRequest();
+  		 var spinner;
+  		
+    	 // Wait for PhoneGap to connect with the device
+    	 //
+    	 document.addEventListener("deviceready",onDeviceReady,false);
+    	 document.addEventListener("backbutton", onBackKeyDown, false);
+
+    	 // PhoneGap is ready to be used!
+    	 //
+    	 function onDeviceReady() {
+    	 	
+    	 	//Internet Access test
+    	 	checkConnection();
+    	 	serverCheck();
+    	 	
+        	pictureSource=navigator.camera.PictureSourceType;
+        	destinationType=navigator.camera.DestinationType;
+        	
+        	device_uuid = device.uuid;
+        	//alert(device_uuid);
+        	refreshPHP = serverURL+"forbat/tmp/"+device_uuid+"/refresh.php";
+        	resultURL = serverURL+"forbat/tmp/"+device_uuid+"/result.txt";
+        	
+        	window.echo = function(str, callback) {
+    			cordova.exec(callback, function(err) {
+        			callback('Nothing to echo.');
+    			}, "Echo", "echo", [str]);
+			};
+			
+        	
+   		 }
+   		 
+   		 //------Server check-----------------
+		function serverCheck(){
+		 	
+		 	var ft = new FileTransfer();    		
+									 
+			//begin to download
+			//alert(serverURL+"serverCheck.png");
+			ft.download(serverURL+"serverCheck.png",filePath+"serverCheck.png",
+    		function(entry) {        		       		
+    			//Sucesss
+    			//Do nothing				
+    		},
+    		function(error) {
+    			//Failed
+    			alert("Unable to connect to Server");
+    			navigator.app.exitApp();	
+    		});
+		}	   	
+   		 
+   		 //<!--function check connection->
+   		 function checkConnection() {
+	        var networkState = navigator.network.connection.type,
+	        	states = {};
+	        	
+	        states[Connection.UNKNOWN]  = 'Unknown connection';
+	        states[Connection.ETHERNET] = 'Ethernet connection';
+	        states[Connection.WIFI]     = 'WiFi connection';
+	        states[Connection.CELL_2G]  = 'Cell 2G connection';
+	        states[Connection.CELL_3G]  = 'Cell 3G connection';
+	        states[Connection.CELL_4G]  = 'Cell 4G connection';
+	        states[Connection.NONE]     = 'No network connection';
+	        
+	        if (states[networkState] == 'No network conncetion'){
+	        	alert('No network connection. please connect to internet then restart the app.');
+	        }
+	        
+	    }
+   		 
+   		 //<!-- function 按下實體返回鍵-->
+   		 function onBackKeyDown() {   		 			
+     		onExit();
+      	 }
+    
+    	 //<!-- function 按下離開鍵-->
+    	 function onExit() {
+    	 	
+        	navigator.notification.confirm(
+            'Exit the program?',  // message
+            onConfirm,              // callback to invoke with index of button pressed
+            'Exit',            // title
+            'Yes,No'          // buttonLabels
+        	);
+        	
+    	 }
+    	 
+    	 //<!-- function 按下離開鍵且確認離開-->
+    	 function onConfirm(button) {
+    	    if(button == 1)navigator.app.exitApp();        	
+    	 }    	 
+    	 
+    	 //<!-- function 按下Album鍵-->
+    	 function getPhoto(source) {
+    	 	if(identifyingFlag == 0){
+	      	 	// Retrieve image file location from specified source
+	     	 	navigator.camera.getPicture(
+	     	 		onPhotoURISuccess, 
+	     	 		onFail, 
+	     	 		{ 	
+	     	 			quality: 50,
+	     	 	   		destinationType: destinationType.FILE_URI,
+	         			sourceType: source 
+	         		}
+	         	);
+	         }else{
+	         	alert(string_WaitForIdentification);
+	         }
+    	 }    	 
+    	 
+    	 //<!-- function 按下Camera鍵-->
+    	 function capturePhoto() {
+    	 	if(identifyingFlag == 0){
+	      		// Take picture using device camera and retrieve image as base64-encoded string      		
+	      		navigator.camera.getPicture(
+	      			onPhotoURISuccess, 
+	      			onFail, 
+	      			{ 
+	      				quality: 50 ,
+	      				destinationType: destinationType.FILE_URI 
+	      			}
+	      		);
+	      	}else{
+	      		alert(string_WaitForIdentification);
+	      	}
+    	 }
+    	  
+		 
+    	 //<!-- function 按下Album鍵或Camera鍵且成功取得file URI-->
+    	 function onPhotoURISuccess(imageURI) {	      	
+	      	// Get image handle
+	      	//
+	      	var imageObj = document.getElementById('smallImage');
+
+	      	// Show the captured photo
+	      	// The inline CSS rules are used to resize the image
+			imageObj.src = imageURI;			
+	      	
+	      	mainString.innerText = "Press IDENTIFY to identify your dish";
+   		 }
+   		 
+   		 //<!-- function fail handler-->
+    	 function onFail(message) {
+      		alert('Failed because: ' + message);
+   		 }
+   		 
+   		 
+   		 function onIdentify(){
+   		 	
+   		 	if(identifyingFlag == 0){ 
+   		 					    
+	        	var img = document.getElementById('smallImage'), // Get URI of picture to upload	        		
+	        		imageURI = img.src, //Image URI from album or camera
+	        		RGB_file_URI = "file:///sdcard/ntufrs/RGB_feature.txt", //Image URI from album or camera
+	        		parent = 'file:///sdcard/ntufrs/', //Get fileEntry from URI and made a copy to our app directory
+	        		parentEntry = new DirectoryEntry('ntufrs',parent); 
+    		    
+    		    alert("This may take a while,please wait...");
+    		    
+    		    //Image pre-processing...
+	        	mainString.innerText="Image pre-processing";
+    		    		
+	    		// 確保完整流程flag開啟
+	    		identifyingFlag = 1;
+	    	    spin_start();
+	    	    
+	        	//Upload Image file
+	        	//var gray_image_URI = "file:///sdcard/ntufrs/tmp.jpg";
+	        	
+	        	//將imageURI解為local file system path : FileEntry
+	        	window.resolveLocalFileSystemURI(imageURI,
+	        		//將FileEntry移到/sdcard/ntufrs/
+	        		function(fileEntry){//fileEntry = 解析後的檔案指標
+	        			//alert(fileEntry.fullPath);
+	        			//alert(fileEntry.toURL());
+	        			fileEntry.copyTo(
+	        				parentEntry,
+	        				'tmp.jpg',
+	        				function(entry){//entry = 複製到目標後的檔案指標
+	        					/*alert('Success');*/
+	        					//Successful callback : image pre-processing
+	        					window.echo("echome", function(echoValue) {
+    							//alert(echoValue == "echome"); // should alert true.
+    							//alert("image pre-processing finished");
+    							//alert(entry.toURL());
+    							//Successful callback : upload image
+    							//uploadPicture(entry.toURL());
+    							upload_RGB_feature_silent(entry.toURL(),RGB_file_URI);
+    							upload_RGB_feature(entry.toURL(),RGB_file_URI);			
+								});
+	        				},
+	        				function(e){
+	        					alert('failed : '+ e.toString());
+	        					identifyingFlag = 0;
+	                			spin_stop();
+	        				}
+	        				);
+	        		}, 
+	        		function(e){
+	        			alert('URI to FileEntry failed');
+	        			identifyingFlag = 0;
+	                	spin_stop();
+	        		}
+	        	);
+	        	
+	        	
+			    
+	        }else{
+	        	alert(string_WaitForIdentification);
+	        }
+   		 	
+   		 }
+   		 //<!-- function 上傳 RGB feature file-->
+   		 function upload_RGB_feature(imageURI,fileURI) {
+				
+				//alert("imageURI : "+imageURI);
+				//alert("fileURI : "+fileURI);				
+				
+	        	if (uploadURL_RGB_feature) {
+	        	
+	        	//secondString.innerText= uploadURL;	
+	        	resetScreen();
+	        	
+	        	//uploading progress...
+	        	mainString.innerText="Uploading RGB feature file";
+	        		        		
+	            // Specify transfer options
+	            var options = new FileUploadOptions();
+	            options.fileKey="file";                    
+	            options.fileName= device_uuid+"_RGB_feature.txt"; //含機器識別碼
+	            options.mimeType="text/plain";
+	            options.chunkedMode = false;
+	
+	            // Transfer rgb feature file to server,
+	            // which is a fake file in this version
+	            var ft = new FileTransfer();
+	             
+	            ft.upload(
+	            	fileURI,
+	            	uploadURL_RGB_feature, 
+	            	function(r) {	                
+	                	uploadPicture(imageURI);                       		        		                    	
+	            	}, 
+	            	function(error) {
+	                	alert("RGB feature file upload Failed!");
+	                	//alert("An error has occurred: Code = " + error.code);
+	                	if(error.code == FileError.ABORT_ERR)alert("ABORT_ERR");
+	                	if(error.code == FileError.NOT_READABLE_ERR)alert("NOT_READABLE_ERR");
+    					//alert("upload error source " + error.source);
+    					//alert("upload error target " + error.target);
+	                	mainString.innerText = "RGB feature file upload Failed!";
+	                	// 確保完整流程flag關閉
+	                	identifyingFlag = 0;
+	                	spin_stop();                                    	
+	            	}, 
+	            	options
+	            	);
+	        	}
+        	
+    	 }
+    	 
+    	 //<!-- function 上傳 RGB feature file ,但是不諱發出任何錯誤訊息,用來繞過老師pad的問題的額外上傳...-->
+   		 function upload_RGB_feature_silent(imageURI,fileURI) {
+				
+	        	if (uploadURL_RGB_feature) {
+	        		        		
+	            // Specify transfer options
+	            var options = new FileUploadOptions();
+	            options.fileKey="file";                    
+	            options.fileName= device_uuid+"_RGB_feature.txt"; //含機器識別碼
+	            options.mimeType="text/plain";
+	            options.chunkedMode = false;
+	
+	            // Transfer picture to server
+	            var ft = new FileTransfer();
+	             
+	            ft.upload(fileURI,uploadURL_RGB_feature, function(r) {
+	                
+	                //uploadPicture(imageURI);
+	                       		        		                    	
+	            }, function(error) {
+	            	//window.clearInterval(timeIntervalId);
+	            	//counter = 0;
+	                //alert("RGB feature file upload Failed!");
+	                //alert("An error has occurred: Code = " + error.code);
+	                //if(error.code == FileError.ABORT_ERR)alert("ABORT_ERR");
+	                //if(error.code == FileError.NOT_READABLE_ERR)alert("NOT_READABLE_ERR");
+    				//alert("upload error source " + error.source);
+    				//alert("upload error target " + error.target);
+	                //mainString.innerText = "RGB feature file upload Failed!";
+	                // 確保完整流程flag關閉
+	                //identifyingFlag = 0;
+	                //spin_stop();                                    	
+	            }, options);
+	        	}
+        	
+    	 }
+   		 
+   		 //<!-- function 上傳照片並開始辨識-->
+   		 function uploadPicture(imageURI) {
+	
+	        	if (uploadURL) {
+	        	
+	        	//uploading image...
+				mainString.innerText="Uploading image and Server side processing";
+	        	
+	            // Specify transfer options
+	            var options = new FileUploadOptions();
+	            options.fileKey="file";                    
+	            options.fileName= device_uuid+"_uploadedImage.jpg"; //含機器識別碼
+	            options.mimeType="image/jpeg";
+	            options.chunkedMode = false;
+	
+	            // Transfer picture to server
+	            var ft = new FileTransfer();
+	            	                      
+	            //origin image : imageURI
+	            //gray-scale image : "/mnt/sdcard/ntufrs/tmp.jpg" 
+	            ft.upload(
+	            	imageURI,
+	            	uploadURL, 
+	            	function(r) {
+	                	//alert("upload Successful! Waiting for result...");	                
+	        			//Waiting for result.txt...        		
+						mainString.innerText="Waiting for result";
+						downloadResult();	                       		        		                    	
+	            	}, 
+	            	function(error) {
+	            		//window.clearInterval(timeIntervalId);
+	            		//counter = 0;
+	                	alert("image upload Failed!");
+	                	mainString.innerText = "image upload Failed!";
+	                	// 確保完整流程flag關閉
+	                	identifyingFlag = 0;
+	                	spin_stop();                                                     	
+	            	}, 
+	            	options
+	            	);
+	        	}
+        	
+    	 }		
+		
+		//<!-- function 下載結果-->
+		function downloadResult(){	
+			
+			var ft2 = new FileTransfer();    									
+			
+			ft2.download(
+				serverURL+"forbat/tmp/"+device_uuid+"/result.txt",
+				filePath+device_uuid+"_result.txt",
+    			function(entry) {
+    				var fEntry = new FileEntry();
+    				fEntry.name = "result";
+					fEntry.fullPath = filePath+device_uuid+"_result.txt";
+					        			   		
+        			//結果讀取        		
+					fEntry.file(fileReaderSuccess, fileReaderFail);											
+					//確保完整流程flag關閉
+					identifyingFlag = 0;										
+					
+					spin_stop();
+    			},
+    			function(error) {
+        			//alert("download Failed!");
+        			//mainString.innerText="download Failed!";
+        			//失敗就繼續嘗試下載    			
+    				callPHP(refreshPHP,'showID');
+        			downloadResult();        		
+    			}
+			);		
+		}		
+				
+		function resetScreen()
+		{
+			 var top1name = document.getElementById('food_header_1');
+			 top1name.style.display ='none';
+			 var top2name = document.getElementById('food_header_2');
+			 top2name.style.display ='none';
+			 var top3name = document.getElementById('food_header_3');
+			 top3name.style.display ='none';
+			 var top4name = document.getElementById('food_header_4');
+			 top4name.style.display ='none';
+			 var top5name = document.getElementById('food_header_5');
+			 top5name.style.display ='none';
+			 weight1.style.display = 'none';
+			 weight2.style.display = 'none';
+			 weight3.style.display = 'none';
+			 weight4.style.display = 'none';
+			 weight5.style.display = 'none';
+			 foodname1.style.display ='none';
+			 foodname1.innerText = " ";	
+			 var img1 = document.getElementById('fingerPrint_1');
+			 img1.style.display = 'none';
+             //img1.src = "images/"+picid+".jpg";
+			 foodname2.style.display ='none';
+			 foodname2.innerText = " ";	
+			 var img2 = document.getElementById('fingerPrint_2');
+			 img2.style.display = 'none';
+             foodname3.style.display ='none';
+			 foodname3.innerText = " ";	
+			 var img3 = document.getElementById('fingerPrint_3');
+			 img3.style.display = 'none';
+			  foodname4.style.display ='none';
+			 foodname4.innerText = " ";	
+			 var img4 = document.getElementById('fingerPrint_4');
+			 img4.style.display = 'none';
+			 foodname5.style.display ='none';
+			 foodname5.innerText = " ";	
+			 var img5 = document.getElementById('fingerPrint_5');
+			 img5.style.display = 'none';
+			 
+		}
+        //------------Show on the screen----------------
+		function showName(num,fname,picid)
+		{
+			switch(num)
+			{
+				case 1:
+				  //var top1food = document.getElementById('foodname1');
+				  foodname1.style.display ='block';
+				  foodname1.innerText = fname;	
+				  var img1 = document.getElementById('fingerPrint_1');
+				  img1.style.display = 'block';
+                  img1.src = "images/"+picid+".jpg";
+			    case 2:
+				  //var top2food = document.getElementById('foodname2');
+				  foodname2.style.display ='block';
+				  foodname2.innerText = fname;
+				  var img2 = document.getElementById('fingerPrint_2');
+				  img2.style.display = 'block';
+				  img2.src = "images/"+picid+".jpg";
+				case 3:
+				  //var top3food = document.getElementById('foodname3');
+				  foodname3.style.display ='block';
+				  foodname3.innerText = fname;
+				  var img3 = document.getElementById('fingerPrint_3');
+				  img3.style.display = 'block';
+				  img3.src = "images/"+picid+".jpg";
+				case 4:
+				  //var top4food = document.getElementById('foodname4');
+				  foodname4.style.display ='block';
+				  foodname4.innerText = fname;
+				  var img4 = document.getElementById('fingerPrint_4');
+				  img4.style.display = 'block';
+				  img4.src = "images/"+picid+".jpg";
+				case 5:
+				  //var top5food = document.getElementById('foodname5');
+				  foodname5.style.display ='block';
+				  foodname5.innerText = fname;
+				  var img5 = document.getElementById('fingerPrint_5');
+				  img5.style.display = 'block';
+				  img5.src = "images/"+picid+".jpg";
+			}
+		}
+		//------Identify 50 categories-----------------
+		var fidArray = [" Bread (麵包) "," Fried (炸物)"," gongbao (宮保雞丁)"," noodle (麵食)"," Pizza (比薩)",
+						" salad (沙拉)", " steak (牛排)"," sushi (壽司)"," tofu (豆腐)"," friednoodle (炒麵)",
+						" friedrice (炒飯)"," hamburger (漢堡)"," jiaozi (餃子)"," curry rice (咖哩飯)"," sandwich (三明治)",
+						" sashimi (生魚片)"," sausage (香腸)",	" shrimp (蝦)"," subway (潛艇堡)","arepas(夾肉餅)",
+						" buns (包子) "," chasiu (叉燒)"," chocolate (巧克力)"," corn (玉米)"," crab (螃蟹)",
+						" croissants (可頌)"," curry chicken (咖哩雞)"," donut (甜甜圈)"," icecream (冰淇淋)"," koahpau (刈包)"
+						," lasagne (千層麵)"," lobster (龍蝦)"," omu rice (蛋包飯)"," peking duck (北京烤鴨)"," popcorn (爆米花)",
+						" pork (豬肉)"," potatochip (洋芋片)"," shaomai (燒賣)","springrolls (越南春捲)"," stuffedbun (湯包) ",
+						" tamale (塔瑪利)"," tantsi (擔仔麵)"," tart (蛋塔)"," turnipcake (蘿蔔糕)"," wontonsoup (餛飩湯)",
+						" stinkytofu (臭豆腐)"," poutine (乾酪肉汁薯條)"," fried fish&fries(炸魚薯條)"," hainanchi (海南雞飯)"," papayasalad (青木瓜司沙拉)"
+						];
+						
+		var imgArray = [ 1, 2, 3, 4, 5,
+						 6,7,8,9,10,
+						 11,12,13,14,15,
+						 16,17,18,19,20,
+						 21,22,23,24,25,
+						 26,27,28,30,31,
+						 32,33,34,35,36,
+						 37,38,39,40,41,
+						 42,43,44,47,48,
+						 49,50,51,52,53						
+					   ];
+		function showRes(fid,topfive){
+			
+			showName(topfive,fidArray[fid-1],imgArray[fid-1]);			
+			
+		}
+			
+			
+
+		function fileReaderSuccess(file){
+			//--------------Convert result.txt to show on mobile---------------
+			 var reader = new FileReader();
+			 var outArray = new Array(); 
+    		 reader.onload = function(evt) {
+        	 	var out = reader.result;
+				outArray = out.split("/");
+		
+		
+					mainString.innerText="Result: \n";
+					//mainString.innerText = mainString.innerText +"Top1: \n";					
+					
+					//-----Top1-----
+					out0 = outArray[0].split(":")
+					var num1 = parseInt(out0[0]);
+					var acc1 = out0[1];
+					var top1name = document.getElementById('result');
+					top1name.style.display ='block';
+					var top1name = document.getElementById('food_header_1');
+					top1name.style.display ='block';
+					showRes(num1,1);
+					var weight01 = document.getElementById('weight1');
+					weight01.style.display = 'block';
+					weight01.innerText = acc1;
+					
+					
+					//-----Top2-----
+					out1 = outArray[1].split(":");					
+					var num2 = parseInt(out1[0]);
+					var acc2 = out1[1];
+					var top2name = document.getElementById('food_header_2');
+					top2name.style.display ='block';
+					
+					showRes(num2,2);
+				    var weight2 = document.getElementById('weight2');
+					weight2.style.display = 'block';
+					weight2.innerText = acc2;
+					
+					//-----Top3---------
+					//mainString.innerText = mainString.innerText +"Top3: \n";
+					out2 = outArray[2].split(":");
+					
+					var num3 = parseInt(out2[0]);
+					var acc3 = out2[1];
+					var top3name = document.getElementById('food_header_3');
+					top3name.style.display ='block';
+					showRes(num3,3);
+					//alert(acc);
+					var weight3 = document.getElementById('weight3');
+					weight3.style.display = 'block';
+					weight3.innerText = acc3;
+					
+					//------Top4------
+					out3 = outArray[3].split(":");
+					var num4 = parseInt(out3[0]);
+					var acc4 = out3[1];
+					var top4name = document.getElementById('food_header_4');
+					top4name.style.display ='block';
+					showRes(num4,4);
+					//alert(acc);
+					var weight4 = document.getElementById('weight4');
+					weight4.style.display = 'block';
+					weight4.innerText = acc4;
+					
+					
+					//------Top5-----
+					out4 = outArray[4].split(":");
+					
+					var num5 = parseInt(out4[0]);
+					var acc5 = out4[1];
+					var top5name = document.getElementById('food_header_5');
+					top5name.style.display ='block';
+					showRes(num5,5);
+					//alert(acc);
+					var weight5 = document.getElementById('weight5');
+					weight5.style.display = 'block';
+					weight5.innerText = acc5;
+					//alert(num1+"/"+num2+"/"+num3+"/"+num4+"/"+num5);
+			 };
+			 reader.readAsText(file);  
+			 
+			 
+		}
+
+		function fileReaderFail(file){
+			alert("fileReaderFail!");		
+		}
+    	
+		
+		function callPHP(srcData, divID)
+		{
+			
+	  		if(XMLHttpRequestObject)
+	  		{
+	    		srcData += "?parm="+new Date().getTime();
+	   			var obj = document.getElementById(divID);
+	    		XMLHttpRequestObject.open("GET", srcData);
+	    		XMLHttpRequestObject.onreadystatechange = function()
+	    		{
+	      			if (XMLHttpRequestObject.readyState == 4 &&	XMLHttpRequestObject.status == 200)
+	      			{
+	       				obj.innerHTML = XMLHttpRequestObject.responseText;
+	      			}
+	    		}
+   			 	XMLHttpRequestObject.send(null);
+  			}
+
+		}
+		
+		
+	</script>
+	
+	<style type='text/css'>
+.out    {
+         font-size:0px;
+        }
+.out * {vertical-align:middle;}
+.out I {height:100%;
+        display:inline-block;
+       }
+</style>
+	
+</head>
+
+<body>
+<div data-role="page">
+	
+	<!-- /header區 -->
+	<div data-role="header" data-position="fixed">
+		<a onclick="onExit();" data-icon="delete" data-theme="b">Exit</a>
+		<h1>N.T.U.F.R.S.</h1>
+		<a onclick="onIdentify();" data-icon="check" data-theme="b">Identify</a>
+	</div>
+	
+	
+	<!-- /content區 -->
+	<div data-role="content">
+		<p style="font-size:large;">NTU Food Recognition System</p>
+		<p style="font-size:medium;">ver 0.78 102212</p>
+		<hr>
+		<div class=out >
+			
+			<img  id="smallImage" width="50%"  />
+			
+		</div>
+		<p style="font-size:large;" id = "mainString">Take a picture by camera or from album!</p>
+		<div id="spin">  
+    	</div>
+
+		<div data-role="collapsible-set">
+
+		<div data-role="collapsible-set" >
+		    
+			<div id="result" data-role="collapsible" data-collapsed="false" style="display:none;">
+		    <h3 id = "food_header_1" style="display:none;">Top 1</h3>
+			<p id="foodname1" style="display:none;"></p>
+	     	<p id = "food_score_1" style="display:none;">weight</p>
+		    <p id="weight1" style="display:none;"></p>
+		    <img style="display:none;width:50px;height:50px;" id="fingerPrint_1" />
+		    </div>
+		 
+			<div data-role="collapsible" data-collapsed="false">
+			<h3 id = "food_header_2" style="display:none;">Top 2</h3>
+			<p id="foodname2" style="display:none;"></p>
+			<p id = "food_score_2" style="display:none;">weight</p>
+			<p id="weight2" style="display:none;"></p>
+			<img style="display:none;width:50px;height:50px;" id="fingerPrint_2" />
+			</div>
+			
+			<div data-role="collapsible" data-collapsed="false">
+			<h3 id = "food_header_3" style="display:none;">Top 3</h3>
+			<p id="foodname3" style="display:none;"></p>
+			<p id = "food_score_3" style="display:none;">weight</p>
+			<p id="weight3" style="display:none;"></p>
+			<img style="display:none;width:50px;height:50px;" id="fingerPrint_3"  />
+			</div>
+			
+			<div data-role="collapsible" data-collapsed="false">
+			<h3 id = "food_header_4" style="display:none;">Top 4</h3>
+			<p id="foodname4" style="display:none;"></p>	
+			<p id = "food_score_4" style="display:none;">weight</p>
+			<p id="weight4" style="display:none;"></p>
+			<img style="display:none;width:50px;height:50px;" id="fingerPrint_4" />
+			</div>
+			
+			<div data-role="collapsible" data-collapsed="false">
+			<h3 id = "food_header_5" style="display:none;">Top 5</h3>
+			<p id="foodname5" style="display:none;"></p>
+			<p  id = "food_score_5" style="display:none;">weight</p>
+			<p id="weight5" style="display:none;"></p>
+			<img style="display:none;width:50px;height:50px;" id="fingerPrint_5"  />
+			</div>
+		
+		</div>
+					
+	</div>
+	
+	<!-- /footer區 -->
+	<div data-role="footer" data-position="fixed">
+		
+		<!-- /navbar 底部導覽列 -->
+ 		<div data-role="navbar" data-position="fixed">
+ 		<ul>
+ 			<li><a onclick="getPhoto(pictureSource.PHOTOLIBRARY);" data-icon="grid" data-iconpos="top">Album</a></li>
+ 			<li><a onclick="capturePhoto();" data-icon="star" data-iconpos="top">Camera</a></li>
+ 		</ul>
+ 		</div>
+ 		<!-- /navbar 底部導覽列 結尾-->
+ 	</div>
+	
+</div><!-- /page -->
+
+	<script type="text/javascript" src="spin.js"></script>  
+    <script type="text/javascript">  
+  		var opts = { //Spinner options 
+  					lines: 10, // The number of lines to draw  
+  					length: 20, // The length of each line  
+  					width: 5, // The line thickness  
+  					radius: 5, // The radius of the inner circle  
+  					rotate: 0, // The rotation offset  
+  					color: '#000', // #rgb or #rrggbb  
+ 				  	speed: 1, // Rounds per second  
+  					trail: 60, // Afterglow percentage  
+  					shadow: false, // Whether to render a shadow  
+  					hwaccel: false, // Whether to use hardware acceleration  
+  					className: 'spinner', // The CSS class to assign to the spinner  
+  					zIndex: 2e9, // The z-index (defaults to 2000000000)  
+  					top: 'auto', // Top position relative to parent in px  
+  					left: 'auto' // Left position relative to parent in px  
+  					},  
+  			target = document.getElementById('spin');
+  			  
+  		spinner = new Spinner(opts).spin(target);
+  		spinner.stop();
+  		function spin_stop(){  
+    		spinner.stop();  
+  		}  
+  		function spin_start(){  
+    		spinner.spin(target);  
+  		}    
+  </script> 
+</body>
+</html>
