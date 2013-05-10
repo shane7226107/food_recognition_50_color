@@ -39,6 +39,7 @@
     	 var XMLHttpRequestObject = false;
   		 XMLHttpRequestObject = new XMLHttpRequest();
   		 var spinner;
+  		 var app_dirname = "ntufrs";
   		
     	 // Wait for PhoneGap to connect with the device
     	 //
@@ -52,6 +53,8 @@
     	 	//Internet Access test
     	 	checkConnection();
     	 	serverCheck();
+    	 	//Create app folder for tmp files
+    	 	createDir(app_dirname);
     	 	
         	pictureSource=navigator.camera.PictureSourceType;
         	destinationType=navigator.camera.DestinationType;
@@ -69,6 +72,23 @@
 			
         	
    		 }
+   		 
+   		 function createDir(dirname){
+    		 window.requestFileSystem(
+				LocalFileSystem.PERSISTENT, 
+				0,
+	        	function(fileSys) {
+					fileSys.root.getDirectory(dirname, 
+											  {create: true,exclusive: false},
+											  function(directory) {
+												  console.log("Directory has been created");
+											  }, createError);
+				}, createError);
+		}
+    	
+    	function createError(){
+    		console.log("Directory crate failed!");
+    	} 
    		 
    		 //------Server check-----------------
 		function serverCheck(){
@@ -654,7 +674,6 @@
 	<!-- /header區 -->
 	<div data-role="header" data-position="fixed">
 		<a onclick="onExit();" data-icon="delete" data-theme="b">Exit</a>
-		<h1>N.T.U.F.R.S.</h1>
 		<a onclick="onIdentify();" data-icon="check" data-theme="b">Identify</a>
 	</div>
 	
@@ -662,7 +681,7 @@
 	<!-- /content區 -->
 	<div data-role="content">
 		<p style="font-size:large;">NTU Food Recognition System</p>
-		<p style="font-size:medium;">ver 0.78 102212</p>
+		<p style="font-size:medium;">ver 0.79 051013</p>
 		<hr>
 		<div class=out >
 			
